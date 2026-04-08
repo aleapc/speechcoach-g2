@@ -1,0 +1,16 @@
+{
+  "package_id": "com.dalff.speechcoach",
+  "edition": "202601",
+  "name": "Speech Coach",
+  "version": "0.1.0",
+  "min_app_version": "0.1.0",
+  "min_sdk_version": "0.0.9",
+  "tagline": "Real-time speaking pace feedback",
+  "description": "Monitor your speaking pace during presentations with real-time WPM feedback on your glasses.",
+  "author": "Dalff",
+  "entrypoint": "index.html",
+  "supported_languages": ["en", "es", "pt"],
+  "permissions": [
+    { "name": "g2-microphone", "desc": "Captures audio to analyze speaking pace." }
+  ]
+}
