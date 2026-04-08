@@ -8,6 +8,7 @@
 import type { TextBlock } from './renderer';
 import { state, type SessionRecord } from '../state';
 import { t, getFeedbackText } from '../i18n';
+import { audioAnalyzer } from './audio';
 
 function formatTime(sec: number): string {
   const m = Math.floor(sec / 60).toString().padStart(2, '0');
@@ -69,7 +70,16 @@ export function homeScreen(): TextBlock[] {
 
 // ── LIVE COACHING SCREEN (detailed) ──
 
+function calibratingScreen(): TextBlock[] {
+  return [
+    { id: 0, name: 'header', x: 0, y: 0, width: 576, height: 50, text: t('appName'), isEventCapture: true },
+    { id: 1, name: 'calibrating', x: 0, y: 80, width: 576, height: 120, text: t('calibrating') },
+    { id: 2, name: 'hint', x: 0, y: 220, width: 576, height: 68, text: t('calibratingHint') },
+  ];
+}
+
 export function liveDetailedScreen(): TextBlock[] {
+  if (!audioAnalyzer.getCalibrationStatus().isCalibrated) return calibratingScreen();
   const timeStr = formatTime(state.elapsedSec);
   const wpm = state.currentWpm;
   const paceBar = buildPaceBar(wpm);
@@ -108,6 +118,7 @@ export function liveDetailedScreen(): TextBlock[] {
 // ── LIVE COACHING SCREEN (simple) ──
 
 export function liveSimpleScreen(): TextBlock[] {
+  if (!audioAnalyzer.getCalibrationStatus().isCalibrated) return calibratingScreen();
   const timeStr = formatTime(state.elapsedSec);
   const wpm = state.currentWpm;
   const feedback = getFeedbackText(state.paceZone, wpm);

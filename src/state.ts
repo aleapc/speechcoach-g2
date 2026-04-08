@@ -2,6 +2,11 @@ export type Screen = 'home' | 'live' | 'summary';
 export type LiveView = 'detailed' | 'simple';
 export type PaceZone = 'slow' | 'ok' | 'fast';
 
+export interface WpmTimelinePoint {
+  sec: number;
+  wpm: number;
+}
+
 export interface SessionRecord {
   id: string;
   date: string;
@@ -9,6 +14,7 @@ export interface SessionRecord {
   avgWpm: number;
   minWpm: number;
   maxWpm: number;
+  wpmTimeline: WpmTimelinePoint[];
 }
 
 export interface WpmThresholds {
@@ -28,6 +34,7 @@ export interface AppState {
   currentWpm: number;
   paceZone: PaceZone;
   wpmSamples: number[];
+  wpmTimeline: WpmTimelinePoint[];
 
   // Session history
   sessions: SessionRecord[];
@@ -35,6 +42,10 @@ export interface AppState {
   // Settings
   thresholds: WpmThresholds;
   language: string;
+  hapticEnabled: boolean;
+
+  // Calibration
+  calibratedSilenceThreshold: number | null;
 }
 
 const DEFAULT_THRESHOLDS: WpmThresholds = { slow: 100, fast: 160 };
@@ -51,11 +62,15 @@ export function createInitialState(): AppState {
     currentWpm: 0,
     paceZone: 'ok',
     wpmSamples: [],
+    wpmTimeline: [],
 
     sessions: [],
 
     thresholds: { ...DEFAULT_THRESHOLDS },
     language: detectLanguage(),
+    hapticEnabled: false,
+
+    calibratedSilenceThreshold: null,
   };
 }
 
@@ -82,6 +97,8 @@ export function startSession(): void {
   state.currentWpm = 0;
   state.paceZone = 'ok';
   state.wpmSamples = [];
+  state.wpmTimeline = [];
+  state.calibratedSilenceThreshold = null;
 }
 
 export function stopSession(): void {
@@ -100,6 +117,7 @@ export function stopSession(): void {
     avgWpm,
     minWpm,
     maxWpm,
+    wpmTimeline: [...state.wpmTimeline],
   };
 
   state.sessions.unshift(record);
@@ -120,6 +138,7 @@ export function updateWpm(wpm: number): void {
   if (wpm > 0) {
     state.wpmSamples.push(wpm);
   }
+  state.wpmTimeline.push({ sec: state.elapsedSec, wpm });
 }
 
 export function goHome(): void {

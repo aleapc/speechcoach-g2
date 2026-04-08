@@ -25,7 +25,17 @@ type TranslationKey =
   | 'doubleTapBack'
   | 'swipeToggleView'
   | 'listening'
-  | 'sessionComplete';
+  | 'sessionComplete'
+  | 'calibrating'
+  | 'calibratingHint'
+  | 'silenceThreshold'
+  | 'wpmGraph'
+  | 'timeAxis'
+  | 'exportJson'
+  | 'exportCsv'
+  | 'exportAll'
+  | 'hapticFeedback'
+  | 'hapticHint';
 
 type Translations = Record<TranslationKey, string>;
 
@@ -58,6 +68,16 @@ const translations: Record<string, Translations> = {
     swipeToggleView: 'Swipe: toggle view',
     listening: 'Listening...',
     sessionComplete: 'Session complete!',
+    calibrating: 'Calibrating...',
+    calibratingHint: 'Stay quiet for 3 seconds',
+    silenceThreshold: 'Noise threshold (auto)',
+    wpmGraph: 'WPM Timeline',
+    timeAxis: 'Time (s)',
+    exportJson: 'JSON',
+    exportCsv: 'CSV',
+    exportAll: 'Export All',
+    hapticFeedback: 'Haptic (Ring)',
+    hapticHint: 'Vibrate on pace change',
   },
   pt: {
     appName: 'SPEECH COACH',
@@ -87,6 +107,16 @@ const translations: Record<string, Translations> = {
     swipeToggleView: 'Deslize: alternar vista',
     listening: 'Ouvindo...',
     sessionComplete: 'Sessao concluida!',
+    calibrating: 'Calibrando...',
+    calibratingHint: 'Fique em silencio por 3s',
+    silenceThreshold: 'Limiar de ruido (auto)',
+    wpmGraph: 'Grafico de PPM',
+    timeAxis: 'Tempo (s)',
+    exportJson: 'JSON',
+    exportCsv: 'CSV',
+    exportAll: 'Exportar Tudo',
+    hapticFeedback: 'Vibrar (Anel)',
+    hapticHint: 'Vibrar ao mudar ritmo',
   },
   es: {
     appName: 'SPEECH COACH',
@@ -116,6 +146,16 @@ const translations: Record<string, Translations> = {
     swipeToggleView: 'Desliza: cambiar vista',
     listening: 'Escuchando...',
     sessionComplete: 'Sesion completada!',
+    calibrating: 'Calibrando...',
+    calibratingHint: 'Mantente en silencio 3s',
+    silenceThreshold: 'Umbral de ruido (auto)',
+    wpmGraph: 'Grafico de PPM',
+    timeAxis: 'Tiempo (s)',
+    exportJson: 'JSON',
+    exportCsv: 'CSV',
+    exportAll: 'Exportar Todo',
+    hapticFeedback: 'Vibracion (Anillo)',
+    hapticHint: 'Vibrar al cambiar ritmo',
   },
 };
 

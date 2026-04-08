@@ -17,6 +17,8 @@ import {
   updateWpm,
 } from './state';
 
+import { AudioAnalyzer } from './glasses/audio';
+
 // ── Test helpers ──
 
 let passed = 0;
@@ -152,6 +154,86 @@ for (let i = 0; i < 25; i++) {
   goHome();
 }
 assert(state.sessions.length === 20, 'history capped at 20 sessions');
+
+// ── NEW TESTS ──
+
+// Test 11: calibratedSilenceThreshold starts null
+console.log('\nTest 11: Calibrated silence threshold starts null');
+resetState();
+assert(state.calibratedSilenceThreshold === null, 'calibratedSilenceThreshold is null initially');
+
+// Test 12: wpmTimeline populated during session
+console.log('\nTest 12: WPM timeline populated during session');
+resetState();
+startSession();
+updateWpm(100);
+updateWpm(120);
+updateWpm(0);
+assert(state.wpmTimeline.length === 3, 'timeline has 3 entries (including wpm=0)');
+assert(state.wpmTimeline[0].wpm === 100, 'first timeline entry is 100 WPM');
+assert(state.wpmTimeline[1].wpm === 120, 'second timeline entry is 120 WPM');
+assert(state.wpmTimeline[2].wpm === 0, 'third timeline entry is 0 WPM');
+
+// Test 13: wpmTimeline included in SessionRecord
+console.log('\nTest 13: WPM timeline included in SessionRecord');
+resetState();
+startSession();
+updateWpm(100);
+updateWpm(120);
+updateWpm(140);
+stopSession();
+assert(state.sessions[0].wpmTimeline !== undefined, 'wpmTimeline exists in session record');
+assert(state.sessions[0].wpmTimeline.length === 3, 'wpmTimeline has 3 entries');
+assert(state.sessions[0].wpmTimeline[0].wpm === 100, 'first timeline wpm correct');
+
+// Test 14: wpmTimeline reset on new session
+console.log('\nTest 14: WPM timeline reset on new session');
+resetState();
+startSession();
+updateWpm(100);
+updateWpm(120);
+stopSession();
+goHome();
+startSession();
+assert(state.wpmTimeline.length === 0, 'wpmTimeline reset for new session');
+
+// Test 15: hapticEnabled defaults to false
+console.log('\nTest 15: Haptic enabled defaults to false');
+resetState();
+assert(state.hapticEnabled === false, 'hapticEnabled is false by default');
+
+// Test 16: paceZone transition detection
+console.log('\nTest 16: Pace zone transition detection');
+resetState();
+startSession();
+updateWpm(80);
+const zone1 = state.paceZone;
+assert(zone1 === 'slow', 'starts in slow zone at 80 WPM');
+updateWpm(130);
+const zone2 = state.paceZone;
+assert(zone2 === 'ok', 'transitions to ok zone at 130 WPM');
+assert(zone1 !== zone2, 'zone actually changed (transition detected)');
+updateWpm(200);
+const zone3 = state.paceZone;
+assert(zone3 === 'fast', 'transitions to fast zone at 200 WPM');
+
+// Test 17: SessionRecord with timeline is JSON-serializable
+console.log('\nTest 17: SessionRecord with timeline is JSON-serializable');
+resetState();
+startSession();
+updateWpm(100);
+updateWpm(150);
+stopSession();
+let jsonStr = '';
+let jsonError = false;
+try {
+  jsonStr = JSON.stringify(state.sessions[0]);
+} catch {
+  jsonError = true;
+}
+assert(!jsonError, 'JSON.stringify does not throw');
+assert(jsonStr.includes('"wpmTimeline"'), 'JSON contains wpmTimeline field');
+assert(jsonStr.includes('"wpm":100'), 'JSON contains wpm data');
 
 // ── Summary ──
 

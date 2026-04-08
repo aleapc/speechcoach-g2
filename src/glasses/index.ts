@@ -13,6 +13,7 @@ declare const bridge: {
   audioControl(enable: boolean): void;
   getLocalStorage(key: string): Promise<string | null>;
   setLocalStorage(key: string, value: string): Promise<void>;
+  callEvenApp(method: string, params: string): void;
 };
 
 let updateInterval: ReturnType<typeof setInterval> | null = null;
@@ -20,6 +21,15 @@ let updateInterval: ReturnType<typeof setInterval> | null = null;
 export function renderCurrentScreen(): void {
   const blocks = getCurrentScreenBlocks();
   renderScreen(blocks);
+}
+
+function triggerHaptic(): void {
+  if (!state.hapticEnabled) return;
+  try {
+    bridge.callEvenApp('vibrate', JSON.stringify({ pattern: 'short', intensity: 1 }));
+  } catch {
+    // Ring not connected or method unsupported
+  }
 }
 
 export function initGlasses(): void {
@@ -37,8 +47,22 @@ export function initGlasses(): void {
   updateInterval = setInterval(() => {
     if (state.isCoaching) {
       updateElapsed();
+
+      const prevZone = state.paceZone;
       const wpm = audioAnalyzer.getWpm();
       updateWpm(wpm);
+
+      // Haptic on zone transition
+      if (state.paceZone !== prevZone) {
+        triggerHaptic();
+      }
+
+      // Sync calibration status to state
+      const cal = audioAnalyzer.getCalibrationStatus();
+      if (cal.isCalibrated) {
+        state.calibratedSilenceThreshold = cal.threshold;
+      }
+
       renderCurrentScreen();
     }
   }, 1000);
@@ -68,6 +92,9 @@ async function loadSettings(): Promise<void> {
       if (settings.language) {
         state.language = settings.language;
       }
+      if (settings.hapticEnabled !== undefined) {
+        state.hapticEnabled = settings.hapticEnabled;
+      }
     }
 
     const historyStr = await bridge.getLocalStorage('speechcoach_history');
@@ -84,6 +111,7 @@ export async function saveSettings(): Promise<void> {
     await bridge.setLocalStorage('speechcoach_settings', JSON.stringify({
       thresholds: state.thresholds,
       language: state.language,
+      hapticEnabled: state.hapticEnabled,
     }));
   } catch {
     // Silently fail

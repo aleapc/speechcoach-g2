@@ -4,20 +4,29 @@
  * Strategy:
  * - Receive PCM chunks (16kHz, signed 16-bit LE, mono)
  * - Compute RMS energy per chunk
- * - Classify frames as speech or silence using energy threshold
+ * - Auto-calibrate silence threshold from ambient noise (first 3 seconds)
+ * - Classify frames as speech or silence using calibrated threshold
  * - Count speech-to-silence transitions (word boundaries)
  * - Estimate WPM using sliding window of 10 seconds
  */
 
 const FRAME_SIZE = 1600; // 100ms frames at 16kHz
-const SILENCE_THRESHOLD = 500; // RMS threshold for speech vs silence
+const DEFAULT_SILENCE_THRESHOLD = 500;
 const WORD_GAP_FRAMES = 2; // >= 200ms silence = word boundary
 const WINDOW_SEC = 10; // Sliding window for WPM smoothing
+const CALIBRATION_DURATION_MS = 3000;
+const THRESHOLD_FLOOR = 200;
+const THRESHOLD_CEILING = 2000;
 
 interface AudioFrame {
   timestamp: number;
   rms: number;
   isSpeech: boolean;
+}
+
+export interface CalibrationStatus {
+  isCalibrated: boolean;
+  threshold: number;
 }
 
 export class AudioAnalyzer {
@@ -29,6 +38,11 @@ export class AudioAnalyzer {
   private windowWordTimestamps: number[] = [];
   private startTime = 0;
 
+  // Calibration
+  private silenceThreshold = DEFAULT_SILENCE_THRESHOLD;
+  private calibrationRmsValues: number[] = [];
+  private isCalibrated = false;
+
   reset(): void {
     this.frames = [];
     this.pendingSamples = [];
@@ -37,6 +51,11 @@ export class AudioAnalyzer {
     this.wordCount = 0;
     this.windowWordTimestamps = [];
     this.startTime = Date.now();
+
+    // Reset calibration
+    this.silenceThreshold = DEFAULT_SILENCE_THRESHOLD;
+    this.calibrationRmsValues = [];
+    this.isCalibrated = false;
   }
 
   /**
@@ -58,8 +77,32 @@ export class AudioAnalyzer {
 
   private processFrame(samples: number[]): void {
     const rms = computeRms(samples);
-    const isSpeech = rms > SILENCE_THRESHOLD;
     const now = Date.now();
+    const elapsed = now - this.startTime;
+
+    // Calibration phase: collect ambient noise for first 3 seconds
+    if (!this.isCalibrated && elapsed < CALIBRATION_DURATION_MS) {
+      this.calibrationRmsValues.push(rms);
+      const frame: AudioFrame = { timestamp: now, rms, isSpeech: false };
+      this.frames.push(frame);
+      return;
+    }
+
+    // Finalize calibration on first frame after 3 seconds
+    if (!this.isCalibrated && this.calibrationRmsValues.length > 0) {
+      this.isCalibrated = true;
+      const mean = this.calibrationRmsValues.reduce((a, b) => a + b, 0) / this.calibrationRmsValues.length;
+      const variance = this.calibrationRmsValues.reduce((a, v) => a + (v - mean) ** 2, 0) / this.calibrationRmsValues.length;
+      const stddev = Math.sqrt(variance);
+      this.silenceThreshold = Math.max(THRESHOLD_FLOOR, Math.min(THRESHOLD_CEILING, Math.round(mean + 2 * stddev)));
+    }
+
+    // Edge case: no calibration data but past duration (shouldn't happen normally)
+    if (!this.isCalibrated) {
+      this.isCalibrated = true;
+    }
+
+    const isSpeech = rms > this.silenceThreshold;
 
     const frame: AudioFrame = { timestamp: now, rms, isSpeech };
     this.frames.push(frame);
@@ -112,6 +155,13 @@ export class AudioAnalyzer {
 
     const wpm = Math.round((wordsInWindow / windowDuration) * 60);
     return Math.min(wpm, 300); // Cap at 300 to avoid crazy spikes
+  }
+
+  /**
+   * Get calibration status and computed threshold.
+   */
+  getCalibrationStatus(): CalibrationStatus {
+    return { isCalibrated: this.isCalibrated, threshold: this.silenceThreshold };
   }
 
   /**
