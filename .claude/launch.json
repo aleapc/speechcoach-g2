@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "speechcoach",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite", "--port", "5180", "--strictPort", "--root", "D:/dev/speechcoach-g2"],
+      "port": 5180
+    }
+  ]
+}

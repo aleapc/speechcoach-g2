@@ -298,7 +298,8 @@ function App() {
   const [language, setLanguage] = useState(state.language);
   const [hapticEnabled, setHapticEnabled] = useState(state.hapticEnabled);
   const [sessions, setSessions] = useState<SessionRecord[]>([...state.sessions]);
-  const [, forceUpdate] = useState(0);
+  // Dirty flag: only save when user explicitly changes a setting
+  const isDirty = useRef(false);
 
   const saveToStorage = useCallback(() => {
     state.thresholds = { ...thresholds };
@@ -314,11 +315,14 @@ function App() {
     } catch {
       // Ignore
     }
-    forceUpdate(n => n + 1);
   }, [thresholds, language, hapticEnabled]);
 
+  // Only persist when settings actually change (dirty flag set by onChange handlers)
   useEffect(() => {
-    saveToStorage();
+    if (isDirty.current) {
+      isDirty.current = false;
+      saveToStorage();
+    }
   }, [saveToStorage]);
 
   useEffect(() => {
@@ -389,7 +393,7 @@ function App() {
           min={50}
           max={200}
           value={thresholds.slow}
-          onChange={e => setThresholds(prev => ({ ...prev, slow: Number(e.target.value) }))}
+          onChange={e => { isDirty.current = true; setThresholds(prev => ({ ...prev, slow: Number(e.target.value) })); }}
         />
 
         <label style={styles.label}>{t('fastThreshold')}</label>
@@ -399,14 +403,14 @@ function App() {
           min={100}
           max={300}
           value={thresholds.fast}
-          onChange={e => setThresholds(prev => ({ ...prev, fast: Number(e.target.value) }))}
+          onChange={e => { isDirty.current = true; setThresholds(prev => ({ ...prev, fast: Number(e.target.value) })); }}
         />
 
         <label style={styles.label}>{t('language')}</label>
         <select
           style={styles.select}
           value={language}
-          onChange={e => setLanguage(e.target.value)}
+          onChange={e => { isDirty.current = true; setLanguage(e.target.value); }}
         >
           <option value="en">English</option>
           <option value="pt">Portugues</option>
@@ -418,7 +422,7 @@ function App() {
             type="checkbox"
             id="haptic"
             checked={hapticEnabled}
-            onChange={e => setHapticEnabled(e.target.checked)}
+            onChange={e => { isDirty.current = true; setHapticEnabled(e.target.checked); }}
           />
           <label htmlFor="haptic" style={{ color: '#aaa', fontSize: 14 }}>
             {t('hapticFeedback')} — {t('hapticHint')}

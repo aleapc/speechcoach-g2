@@ -33,6 +33,12 @@ function triggerHaptic(): void {
 }
 
 export function initGlasses(): void {
+  // Guard against double-init: clear any existing interval
+  if (updateInterval) {
+    clearInterval(updateInterval);
+    updateInterval = null;
+  }
+
   // Register event handler (fire-and-forget, no await)
   bridge.onEvenHubEvent((event: unknown) => {
     handleEvent(event as Parameters<typeof handleEvent>[0]);

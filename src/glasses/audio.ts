@@ -43,6 +43,10 @@ export class AudioAnalyzer {
   private calibrationRmsValues: number[] = [];
   private isCalibrated = false;
 
+  // Exponential moving average for WPM smoothing
+  private smoothedWpm: number | null = null;
+  private static readonly EMA_ALPHA = 0.3;
+
   reset(): void {
     this.frames = [];
     this.pendingSamples = [];
@@ -56,6 +60,9 @@ export class AudioAnalyzer {
     this.silenceThreshold = DEFAULT_SILENCE_THRESHOLD;
     this.calibrationRmsValues = [];
     this.isCalibrated = false;
+
+    // Reset EMA
+    this.smoothedWpm = null;
   }
 
   /**
@@ -153,7 +160,16 @@ export class AudioAnalyzer {
 
     if (windowDuration <= 0) return 0;
 
-    const wpm = Math.round((wordsInWindow / windowDuration) * 60);
+    const rawWpm = (wordsInWindow / windowDuration) * 60;
+
+    // Apply exponential moving average to prevent erratic jumps (especially in first 10s)
+    if (this.smoothedWpm === null) {
+      this.smoothedWpm = rawWpm;
+    } else {
+      this.smoothedWpm = AudioAnalyzer.EMA_ALPHA * rawWpm + (1 - AudioAnalyzer.EMA_ALPHA) * this.smoothedWpm;
+    }
+
+    const wpm = Math.round(this.smoothedWpm);
     return Math.min(wpm, 300); // Cap at 300 to avoid crazy spikes
   }
 

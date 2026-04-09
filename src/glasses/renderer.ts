@@ -17,6 +17,16 @@ declare const bridge: {
 };
 
 let isFirstRender = true;
+let lastContentHash = '';
+
+function computeContentHash(blocks: TextBlock[]): string {
+  // Simple hash: concatenate block ids and text content
+  let hash = '';
+  for (const b of blocks) {
+    hash += `${b.id}:${b.text}|`;
+  }
+  return hash;
+}
 
 export interface TextBlock {
   id: number;
@@ -43,6 +53,12 @@ function buildTextContainer(block: TextBlock): TextContainerProperty {
 }
 
 export function renderScreen(blocks: TextBlock[]): void {
+  // Skip rebuild if content hasn't changed (avoid unnecessary bridge calls)
+  const hash = computeContentHash(blocks);
+  if (!isFirstRender && hash === lastContentHash) {
+    return;
+  }
+
   // Ensure exactly one container has isEventCapture
   let hasCapture = false;
   for (const b of blocks) {
@@ -66,8 +82,11 @@ export function renderScreen(blocks: TextBlock[]): void {
       textObject: textObjects,
     }));
   }
+
+  lastContentHash = hash;
 }
 
 export function resetRenderer(): void {
   isFirstRender = true;
+  lastContentHash = '';
 }
