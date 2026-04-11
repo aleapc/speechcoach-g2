@@ -4,6 +4,7 @@
  * Otherwise, mount React settings panel for phone UI.
  */
 
+import './telemetry'; // self-initializes error listeners
 import { initGlasses, setupAudioCallback } from './glasses/index';
 
 declare const bridge: unknown;
