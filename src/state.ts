@@ -15,6 +15,11 @@ export interface SessionRecord {
   minWpm: number;
   maxWpm: number;
   wpmTimeline: WpmTimelinePoint[];
+  // Backend-derived metrics (only populated if backend STT was active)
+  fillerWords?: number;
+  wordCount?: number;
+  transcript?: string;
+  usedBackend?: boolean;
 }
 
 export interface WpmThresholds {
@@ -46,6 +51,13 @@ export interface AppState {
 
   // Calibration
   calibratedSilenceThreshold: number | null;
+
+  // Backend integration (real STT)
+  backendUrl: string;
+  backendConnected: boolean;
+  liveTranscript: string;
+  fillerWords: number;
+  wordCount: number;
 
   // Device status (from SDK)
   batteryLevel: number | null;
@@ -80,6 +92,12 @@ export function createInitialState(): AppState {
 
     calibratedSilenceThreshold: null,
 
+    backendUrl: 'http://localhost:8787',
+    backendConnected: false,
+    liveTranscript: '',
+    fillerWords: 0,
+    wordCount: 0,
+
     batteryLevel: null,
     isWearing: null,
 
@@ -113,6 +131,10 @@ export function startSession(): void {
   state.wpmSamples = [];
   state.wpmTimeline = [];
   state.calibratedSilenceThreshold = null;
+  state.liveTranscript = '';
+  state.fillerWords = 0;
+  state.wordCount = 0;
+  state.backendConnected = false;
 }
 
 export function stopSession(): void {
@@ -132,6 +154,10 @@ export function stopSession(): void {
     minWpm,
     maxWpm,
     wpmTimeline: [...state.wpmTimeline],
+    fillerWords: state.backendConnected ? state.fillerWords : undefined,
+    wordCount: state.backendConnected ? state.wordCount : undefined,
+    transcript: state.backendConnected ? state.liveTranscript : undefined,
+    usedBackend: state.backendConnected,
   };
 
   state.sessions.unshift(record);

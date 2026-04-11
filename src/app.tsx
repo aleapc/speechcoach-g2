@@ -298,6 +298,14 @@ function App() {
   const [language, setLanguage] = useState(state.language);
   const [hapticEnabled, setHapticEnabled] = useState(state.hapticEnabled);
   const [sessions, setSessions] = useState<SessionRecord[]>([...state.sessions]);
+  const [backendUrl, setBackendUrl] = useState<string>(() => {
+    try {
+      return localStorage.getItem('speechcoach_backend_url') || 'http://localhost:8787';
+    } catch {
+      return 'http://localhost:8787';
+    }
+  });
+  const [backendStatus, setBackendStatus] = useState<'unknown' | 'ok' | 'fail'>('unknown');
   // Dirty flag: only save when user explicitly changes a setting
   const isDirty = useRef(false);
 
@@ -305,6 +313,7 @@ function App() {
     state.thresholds = { ...thresholds };
     state.language = language;
     state.hapticEnabled = hapticEnabled;
+    state.backendUrl = backendUrl;
 
     try {
       localStorage.setItem('speechcoach_settings', JSON.stringify({
@@ -312,10 +321,25 @@ function App() {
         language,
         hapticEnabled,
       }));
+      localStorage.setItem('speechcoach_backend_url', backendUrl);
     } catch {
       // Ignore
     }
-  }, [thresholds, language, hapticEnabled]);
+  }, [thresholds, language, hapticEnabled, backendUrl]);
+
+  const testBackend = useCallback(async () => {
+    setBackendStatus('unknown');
+    try {
+      const url = backendUrl.replace(/\/$/, '');
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 3000);
+      const res = await fetch(`${url}/health`, { signal: ctrl.signal });
+      clearTimeout(timer);
+      setBackendStatus(res.ok ? 'ok' : 'fail');
+    } catch {
+      setBackendStatus('fail');
+    }
+  }, [backendUrl]);
 
   // Only persist when settings actually change (dirty flag set by onChange handlers)
   useEffect(() => {
@@ -435,6 +459,37 @@ function App() {
             <span>{state.calibratedSilenceThreshold}</span>
           </div>
         )}
+      </div>
+
+      {/* Backend STT */}
+      <div style={styles.section}>
+        <div style={styles.sectionTitle}>Backend STT</div>
+        <label style={styles.label}>Server URL</label>
+        <input
+          style={styles.input}
+          type="text"
+          value={backendUrl}
+          placeholder="http://localhost:8787"
+          onChange={e => { isDirty.current = true; setBackendUrl(e.target.value); }}
+        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button
+            style={{ ...styles.exportAllBtn, padding: '8px 14px' }}
+            onClick={testBackend}
+          >
+            Test connection
+          </button>
+          <span style={{
+            fontSize: 13,
+            color: backendStatus === 'ok' ? '#4caf50' : backendStatus === 'fail' ? '#e57373' : '#666',
+          }}>
+            {backendStatus === 'ok' ? 'reachable' : backendStatus === 'fail' ? 'unreachable' : ''}
+          </span>
+        </div>
+        <div style={{ fontSize: 12, color: '#555', marginTop: 10 }}>
+          Real speech-to-text and analysis. If unreachable, Speech Coach
+          falls back to local RMS-based WPM estimation.
+        </div>
       </div>
 
       {/* WPM Timeline Chart */}

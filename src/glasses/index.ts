@@ -14,7 +14,7 @@ import {
   liveMascotTextBlocks,
   liveMascotUpgradeBlocks,
 } from './screens';
-import { handleEvent, autoStartCoaching } from './events';
+import { handleEvent, autoStartCoaching, getCurrentBackend } from './events';
 import { audioAnalyzer } from './audio';
 import { state, updateElapsed, updateWpm, stopSession } from '../state';
 
@@ -143,8 +143,20 @@ export function initGlasses(): void {
     updateElapsed();
 
     const prevZone = state.paceZone;
-    const wpm = audioAnalyzer.getWpm();
-    updateWpm(wpm);
+    // Prefer real metrics from the backend if it's connected; otherwise
+    // fall back to local RMS-based WPM estimation.
+    let wpm: number;
+    if (state.backendConnected) {
+      wpm = state.currentWpm; // already populated by SSE updates
+      state.wpmTimeline.push({ sec: state.elapsedSec, wpm });
+      state.paceZone =
+        wpm < state.thresholds.slow ? 'slow'
+        : wpm > state.thresholds.fast ? 'fast'
+        : 'ok';
+    } else {
+      wpm = audioAnalyzer.getWpm();
+      updateWpm(wpm);
+    }
 
     // Haptic on zone transition
     if (state.paceZone !== prevZone) {
@@ -178,7 +190,14 @@ export function setupAudioCallback(): void {
   if (typeof window !== 'undefined') {
     (window as unknown as Record<string, unknown>).audioEvent = (data: ArrayBuffer) => {
       if (state.isCoaching) {
+        // Always feed the local analyzer (needed for calibration + fallback).
         audioAnalyzer.feedPcmData(data);
+        // Also forward to the backend if connected.
+        const backend = getCurrentBackend();
+        if (backend && backend.isConnected()) {
+          // Clone the ArrayBuffer so the batching client owns a stable ref.
+          backend.sendAudio(data.slice(0));
+        }
       }
     };
   }

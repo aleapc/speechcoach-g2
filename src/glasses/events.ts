@@ -23,6 +23,14 @@ import {
 } from '../state';
 import { renderCurrentScreen } from './index';
 import { audioAnalyzer } from './audio';
+import { getStoredBackendUrl, BackendClient, type BackendUpdate } from './backend';
+
+let currentBackend: BackendClient | null = null;
+let backendDisconnect: (() => void) | null = null;
+
+export function getCurrentBackend(): BackendClient | null {
+  return currentBackend;
+}
 
 declare const bridge: {
   audioControl(enable: boolean): Promise<boolean> | void;
@@ -221,12 +229,81 @@ function startCoaching(): void {
   // Fire-and-forget: don't await inside event handler
   enableAudio(true);
   renderCurrentScreen();
+  // Attempt to connect to the backend for real STT. Falls back to local
+  // RMS analysis if the backend is unreachable.
+  void tryConnectBackend();
 }
 
 function stopCoaching(): void {
   enableAudio(false);
-  stopSession();
-  renderCurrentScreen();
+  // Finalize backend session (if any) and merge its metrics into state
+  // before stopSession() snapshots into history.
+  void finalizeBackend().finally(() => {
+    stopSession();
+    renderCurrentScreen();
+  });
+}
+
+async function tryConnectBackend(): Promise<void> {
+  try {
+    const url = getStoredBackendUrl();
+    const client = new BackendClient(url);
+    state.backendUrl = url;
+    const ok = await client.probe();
+    if (!ok) {
+      state.backendConnected = false;
+      return;
+    }
+    const id = await client.createSession();
+    if (!id) {
+      state.backendConnected = false;
+      return;
+    }
+    currentBackend = client;
+    state.backendConnected = true;
+    backendDisconnect = client.connectStream((update: BackendUpdate) => {
+      handleBackendUpdate(update);
+    });
+  } catch {
+    state.backendConnected = false;
+  }
+}
+
+function handleBackendUpdate(update: BackendUpdate): void {
+  if (update.type === 'error') return;
+  if (update.metrics) {
+    state.currentWpm = update.metrics.wpm;
+    state.fillerWords = update.metrics.fillerWords;
+    state.wordCount = update.metrics.wordCount;
+    // Let state machinery classify the zone.
+    if (state.currentWpm < state.thresholds.slow) state.paceZone = 'slow';
+    else if (state.currentWpm > state.thresholds.fast) state.paceZone = 'fast';
+    else state.paceZone = 'ok';
+    if (state.currentWpm > 0) state.wpmSamples.push(state.currentWpm);
+  }
+  if (typeof update.transcript === 'string') {
+    state.liveTranscript = update.transcript;
+  }
+}
+
+async function finalizeBackend(): Promise<void> {
+  if (!currentBackend) return;
+  try {
+    const metrics = await currentBackend.finalize();
+    if (metrics) {
+      state.currentWpm = metrics.wpm;
+      state.fillerWords = metrics.fillerWords;
+      state.wordCount = metrics.wordCount;
+    }
+  } catch {
+    // ignore
+  } finally {
+    if (backendDisconnect) {
+      try { backendDisconnect(); } catch { /* ignore */ }
+      backendDisconnect = null;
+    }
+    currentBackend = null;
+  }
 }
 
 function enableAudio(enable: boolean): void {

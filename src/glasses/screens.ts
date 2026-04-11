@@ -102,6 +102,8 @@ export const LIVE_CONTAINER = {
   VU: 2,
   ZONE: 3,
   MASCOT: 4,
+  FILLER: 5,
+  TRANSCRIPT: 6,
 } as const;
 
 function zoneLabel(wpm: number): string {
@@ -123,38 +125,61 @@ export function liveMascotTextBlocks(): TextBlock[] {
   const textX = 8 + CHAR_IMG_W + 16; // ~96
   const textW = 576 - textX - 8;
 
-  return [
+  const headerTail = state.backendConnected ? '  [STT]' : '';
+  const headerText = `${t('appName')}${headerTail}        ${timeStr}`;
+
+  const blocks: TextBlock[] = [
     {
       id: LIVE_CONTAINER.HEADER, name: 'header',
       x: 0, y: 0, width: 576, height: 36,
-      text: `${t('appName')}        ${timeStr}`,
+      text: headerText,
       isEventCapture: true,
     },
     {
       id: LIVE_CONTAINER.WPM, name: 'wpm',
-      x: textX, y: 48, width: textW, height: 70,
+      x: textX, y: 44, width: textW, height: 60,
       text: `${wpm} ${t('wpm')}`,
     },
     {
       id: LIVE_CONTAINER.VU, name: 'vu',
-      x: textX, y: 130, width: textW, height: 36,
+      x: textX, y: 108, width: textW, height: 28,
       text: vu,
     },
     {
       id: LIVE_CONTAINER.ZONE, name: 'zone',
-      x: textX, y: 180, width: textW, height: 40,
+      x: textX, y: 140, width: textW, height: 32,
       text: zone,
     },
   ];
+
+  if (state.backendConnected) {
+    const fillerText = `Um/Uh: ${state.fillerWords}   Words: ${state.wordCount}`;
+    blocks.push({
+      id: LIVE_CONTAINER.FILLER, name: 'filler',
+      x: textX, y: 176, width: textW, height: 28,
+      text: fillerText,
+    });
+    // Last ~60 chars of transcript as a scrolling preview.
+    const transcriptTail = state.liveTranscript.slice(-60);
+    blocks.push({
+      id: LIVE_CONTAINER.TRANSCRIPT, name: 'transcript',
+      x: textX, y: 208, width: textW, height: 72,
+      text: transcriptTail,
+    });
+  }
+
+  return blocks;
 }
 
-/** Only the text blocks that need a 300ms refresh (WPM, VU, zone). */
+/** Only the text blocks that need a 300ms refresh (WPM, VU, zone, filler, transcript). */
 export function liveMascotUpgradeBlocks(): TextBlock[] {
   return liveMascotTextBlocks().filter(b =>
     b.id === LIVE_CONTAINER.WPM ||
     b.id === LIVE_CONTAINER.VU ||
     b.id === LIVE_CONTAINER.ZONE ||
-    b.id === LIVE_CONTAINER.HEADER,
+    b.id === LIVE_CONTAINER.HEADER ||
+    b.id === LIVE_CONTAINER.FILLER ||
+    b.id === LIVE_CONTAINER.TRANSCRIPT,
   );
 }
 
