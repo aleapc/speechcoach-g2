@@ -24,22 +24,37 @@ declare const bridge: {
   audioControl(enable: boolean): void;
 };
 
-interface G2Event {
-  textEvent?: { containerID: number; containerName: string; eventType: number };
-  listEvent?: { containerID: number; containerName: string; currentSelectItemIndex: number; eventType: number };
-  jsonData?: { containerID: number; containerName: string; eventType: number; currentSelectItemIndex?: number };
-}
-
 const EVENT_CLICK = 0;
 const EVENT_SCROLL_TOP = 1;
 const EVENT_SCROLL_BOTTOM = 2;
 const EVENT_DOUBLE_CLICK = 3;
 
-export function handleEvent(event: G2Event): void {
-  const data = event.jsonData ?? event.textEvent ?? event.listEvent;
-  if (!data) return;
+function normalizeEventType(raw: unknown): number {
+  if (raw === undefined || raw === null) return 0;
+  if (typeof raw === 'number') return raw;
+  if (typeof raw === 'string') return parseInt(raw, 10) || 0;
+  return -1;
+}
 
-  const eventType = data.eventType;
+function parseEventType(event: unknown): number {
+  const e = event as Record<string, unknown>;
+  // On real G2 hardware, taps arrive as sysEvent (not textEvent/listEvent).
+  // Try every known sub-event key; first valid one wins.
+  for (const key of ['textEvent', 'sysEvent', 'listEvent', 'jsonData']) {
+    const sub = e[key] as Record<string, unknown> | undefined;
+    if (sub && typeof sub === 'object') {
+      const evtType = normalizeEventType(sub.eventType);
+      if (evtType >= 0 && evtType <= 3) {
+        return evtType;
+      }
+    }
+  }
+  return -1;
+}
+
+export function handleEvent(event: unknown): void {
+  const eventType = parseEventType(event);
+  if (eventType < 0) return;
 
   // Double-tap: always go home (works from any screen, even during loading)
   if (eventType === EVENT_DOUBLE_CLICK) {
