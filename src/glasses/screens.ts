@@ -56,11 +56,19 @@ export function homeScreen(): TextBlock[] {
     }
   }
 
+  // Battery line — empty until we get a reading from the SDK.
+  let headerText = t('appName');
+  if (typeof state.batteryLevel === 'number') {
+    const bat = state.batteryLevel;
+    const warn = bat < 15 ? `  ${t('lowBattery')}` : '';
+    headerText = `${t('appName')}    ${t('battery')}: ${bat}%${warn}`;
+  }
+
   return [
     {
       id: 0, name: 'header',
       x: 0, y: 0, width: 576, height: 50,
-      text: t('appName'),
+      text: headerText,
       isEventCapture: true,
     },
     {

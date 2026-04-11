@@ -14,16 +14,29 @@ import {
   liveMascotTextBlocks,
   liveMascotUpgradeBlocks,
 } from './screens';
-import { handleEvent } from './events';
+import { handleEvent, autoStartCoaching } from './events';
 import { audioAnalyzer } from './audio';
-import { state, updateElapsed, updateWpm } from '../state';
+import { state, updateElapsed, updateWpm, stopSession } from '../state';
+
+interface DeviceInfoLike {
+  isWearing?: boolean;
+  batteryLevel?: number;
+}
+interface DeviceStatusLike {
+  isWearing?: boolean;
+  batteryLevel?: number;
+}
+type LaunchSourceLike = 'appMenu' | 'glassesMenu' | string;
 
 declare const bridge: {
   onEvenHubEvent(callback: (event: unknown) => void): void;
-  audioControl(enable: boolean): void;
+  audioControl(enable: boolean): Promise<boolean> | void;
   getLocalStorage(key: string): Promise<string | null>;
   setLocalStorage(key: string, value: string): Promise<void>;
   callEvenApp(method: string, params: string): void;
+  getDeviceInfo?(): Promise<DeviceInfoLike | null>;
+  onDeviceStatusChanged?(callback: (status: DeviceStatusLike) => void): () => void;
+  onLaunchSource?(callback: (source: LaunchSourceLike) => void): () => void;
 };
 
 let updateInterval: ReturnType<typeof setInterval> | null = null;
@@ -108,6 +121,12 @@ export function initGlasses(): void {
   bridge.onEvenHubEvent((event: unknown) => {
     handleEvent(event as Parameters<typeof handleEvent>[0]);
   });
+
+  // Device info + status listener (battery, wearing)
+  initDeviceInfo();
+
+  // Launch source differentiation (auto-start if launched from glasses menu)
+  initLaunchSource();
 
   // Load saved settings
   loadSettings().then(() => {
@@ -217,6 +236,87 @@ export function cleanup(): void {
     updateInterval = null;
   }
   stopVuLoop();
+}
+
+function initDeviceInfo(): void {
+  // Initial fetch
+  try {
+    if (typeof bridge.getDeviceInfo === 'function') {
+      void bridge.getDeviceInfo().then((info) => {
+        if (!info) return;
+        if (typeof info.batteryLevel === 'number') {
+          state.batteryLevel = info.batteryLevel;
+        }
+        if (typeof info.isWearing === 'boolean') {
+          state.isWearing = info.isWearing;
+        }
+        // Re-render home so the battery line shows immediately.
+        if (state.screen === 'home') renderCurrentScreen();
+      }).catch(() => {
+        // ignore
+      });
+    }
+  } catch {
+    // ignore
+  }
+
+  // Status listener
+  try {
+    if (typeof bridge.onDeviceStatusChanged === 'function') {
+      bridge.onDeviceStatusChanged((status) => {
+        let changed = false;
+        if (typeof status.batteryLevel === 'number' && status.batteryLevel !== state.batteryLevel) {
+          state.batteryLevel = status.batteryLevel;
+          changed = true;
+        }
+        if (typeof status.isWearing === 'boolean' && status.isWearing !== state.isWearing) {
+          state.isWearing = status.isWearing;
+          changed = true;
+        }
+
+        // If glasses are removed during coaching, stop coaching.
+        if (status.isWearing === false && state.isCoaching) {
+          try {
+            bridge.audioControl(false);
+          } catch {
+            // ignore
+          }
+          stopSession();
+          renderCurrentScreen();
+          return;
+        }
+
+        if (changed && state.screen === 'home') {
+          renderCurrentScreen();
+        }
+      });
+    }
+  } catch {
+    // ignore
+  }
+}
+
+function initLaunchSource(): void {
+  try {
+    if (typeof bridge.onLaunchSource === 'function') {
+      bridge.onLaunchSource((source) => {
+        if (source === 'glassesMenu') {
+          state.launchedFromGlassesMenu = true;
+          // Auto-start coaching immediately on launch from glasses menu.
+          // Wait briefly for settings/render to land, then start.
+          setTimeout(() => {
+            try {
+              autoStartCoaching();
+            } catch {
+              // ignore
+            }
+          }, 150);
+        }
+      });
+    }
+  } catch {
+    // ignore
+  }
 }
 
 // Re-export for convenience

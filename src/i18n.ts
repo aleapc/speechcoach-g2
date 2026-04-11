@@ -35,7 +35,9 @@ type TranslationKey =
   | 'exportCsv'
   | 'exportAll'
   | 'hapticFeedback'
-  | 'hapticHint';
+  | 'hapticHint'
+  | 'battery'
+  | 'lowBattery';
 
 type Translations = Record<TranslationKey, string>;
 
@@ -78,6 +80,8 @@ const translations: Record<string, Translations> = {
     exportAll: 'Export All',
     hapticFeedback: 'Haptic (Ring)',
     hapticHint: 'Vibrate on pace change',
+    battery: 'Battery',
+    lowBattery: 'LOW BATTERY',
   },
   pt: {
     appName: 'SPEECH COACH',
@@ -117,6 +121,8 @@ const translations: Record<string, Translations> = {
     exportAll: 'Exportar Tudo',
     hapticFeedback: 'Vibrar (Anel)',
     hapticHint: 'Vibrar ao mudar ritmo',
+    battery: 'Bateria',
+    lowBattery: 'BATERIA BAIXA',
   },
   es: {
     appName: 'SPEECH COACH',
@@ -156,6 +162,8 @@ const translations: Record<string, Translations> = {
     exportAll: 'Exportar Todo',
     hapticFeedback: 'Vibracion (Anillo)',
     hapticHint: 'Vibrar al cambiar ritmo',
+    battery: 'Bateria',
+    lowBattery: 'BATERIA BAJA',
   },
 };
 

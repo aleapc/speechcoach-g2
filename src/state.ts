@@ -46,6 +46,14 @@ export interface AppState {
 
   // Calibration
   calibratedSilenceThreshold: number | null;
+
+  // Device status (from SDK)
+  batteryLevel: number | null;
+  isWearing: boolean | null;
+
+  // Lifecycle / launch
+  isForeground: boolean;
+  launchedFromGlassesMenu: boolean;
 }
 
 const DEFAULT_THRESHOLDS: WpmThresholds = { slow: 100, fast: 160 };
@@ -71,6 +79,12 @@ export function createInitialState(): AppState {
     hapticEnabled: false,
 
     calibratedSilenceThreshold: null,
+
+    batteryLevel: null,
+    isWearing: null,
+
+    isForeground: true,
+    launchedFromGlassesMenu: false,
   };
 }
 
