@@ -2,8 +2,18 @@
  * Glasses module entry — wires up events, audio, and rendering loop.
  */
 
-import { renderScreen } from './renderer';
-import { getCurrentScreenBlocks } from './screens';
+import {
+  renderScreen,
+  renderScreenWithImage,
+  renderTextUpgrade,
+  getLastImageKey,
+} from './renderer';
+import {
+  getCurrentScreenBlocks,
+  liveMascotImageBlock,
+  liveMascotTextBlocks,
+  liveMascotUpgradeBlocks,
+} from './screens';
 import { handleEvent } from './events';
 import { audioAnalyzer } from './audio';
 import { state, updateElapsed, updateWpm } from '../state';
@@ -17,10 +27,65 @@ declare const bridge: {
 };
 
 let updateInterval: ReturnType<typeof setInterval> | null = null;
+let vuInterval: ReturnType<typeof setInterval> | null = null;
+
+function isMascotLiveView(): boolean {
+  return (
+    state.screen === 'live' &&
+    state.liveView === 'detailed' &&
+    state.isCoaching &&
+    audioAnalyzer.getCalibrationStatus().isCalibrated
+  );
+}
+
+/** Full rebuild with the mascot image for the current pace zone. */
+function renderLiveMascot(): void {
+  const image = liveMascotImageBlock();
+  if (!image) {
+    // Fallback: regular text-only rebuild.
+    renderScreen(getCurrentScreenBlocks());
+    return;
+  }
+  // Fire-and-forget — the image flow is async but we don't need to await.
+  void renderScreenWithImage(image, liveMascotTextBlocks());
+}
+
+/** Flicker-free text upgrades for WPM / VU / zone at ~300ms. */
+function upgradeLiveText(): void {
+  const blocks = liveMascotUpgradeBlocks();
+  for (const b of blocks) {
+    renderTextUpgrade(b.id, b.name, b.text);
+  }
+}
 
 export function renderCurrentScreen(): void {
+  if (isMascotLiveView()) {
+    renderLiveMascot();
+    return;
+  }
   const blocks = getCurrentScreenBlocks();
   renderScreen(blocks);
+}
+
+function stopVuLoop(): void {
+  if (vuInterval) {
+    clearInterval(vuInterval);
+    vuInterval = null;
+  }
+}
+
+function startVuLoop(): void {
+  stopVuLoop();
+  vuInterval = setInterval(() => {
+    if (!state.isCoaching) {
+      stopVuLoop();
+      return;
+    }
+    if (!isMascotLiveView()) return;
+    // Only upgrade once the initial mascot image rebuild has landed.
+    if (!getLastImageKey()) return;
+    upgradeLiveText();
+  }, 300);
 }
 
 function triggerHaptic(): void {
@@ -51,24 +116,38 @@ export function initGlasses(): void {
 
   // Start update loop (1Hz for timer + WPM)
   updateInterval = setInterval(() => {
-    if (state.isCoaching) {
-      updateElapsed();
+    if (!state.isCoaching) {
+      stopVuLoop();
+      return;
+    }
 
-      const prevZone = state.paceZone;
-      const wpm = audioAnalyzer.getWpm();
-      updateWpm(wpm);
+    updateElapsed();
 
-      // Haptic on zone transition
-      if (state.paceZone !== prevZone) {
-        triggerHaptic();
+    const prevZone = state.paceZone;
+    const wpm = audioAnalyzer.getWpm();
+    updateWpm(wpm);
+
+    // Haptic on zone transition
+    if (state.paceZone !== prevZone) {
+      triggerHaptic();
+    }
+
+    // Sync calibration status to state
+    const cal = audioAnalyzer.getCalibrationStatus();
+    if (cal.isCalibrated) {
+      state.calibratedSilenceThreshold = cal.threshold;
+    }
+
+    if (isMascotLiveView()) {
+      // Only rebuild (with the image) when the pose would change —
+      // otherwise rely on the 300ms text upgrade loop.
+      const image = liveMascotImageBlock();
+      if (image && image.key !== getLastImageKey()) {
+        void renderScreenWithImage(image, liveMascotTextBlocks());
       }
-
-      // Sync calibration status to state
-      const cal = audioAnalyzer.getCalibrationStatus();
-      if (cal.isCalibrated) {
-        state.calibratedSilenceThreshold = cal.threshold;
-      }
-
+      if (!vuInterval) startVuLoop();
+    } else {
+      stopVuLoop();
       renderCurrentScreen();
     }
   }, 1000);
@@ -137,6 +216,7 @@ export function cleanup(): void {
     clearInterval(updateInterval);
     updateInterval = null;
   }
+  stopVuLoop();
 }
 
 // Re-export for convenience
