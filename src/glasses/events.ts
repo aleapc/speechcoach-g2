@@ -21,7 +21,7 @@ import {
   goHome,
   toggleLiveView,
 } from '../state';
-import { renderCurrentScreen } from './index';
+import { renderCurrentScreen, cleanup } from './index';
 import { audioAnalyzer } from './audio';
 import { getStoredBackendUrl, BackendClient, type BackendUpdate } from './backend';
 
@@ -154,6 +154,8 @@ function handleForegroundExit(): void {
     }
   }
   enableAudio(false);
+  // Clear the 1Hz update loop and VU meter interval to save resources.
+  cleanup();
   // Persist state so FOREGROUND_ENTER can restore it.
   void saveLifecycleState();
 }

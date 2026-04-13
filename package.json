@@ -1,6 +1,6 @@
 {
   "name": "speechcoach-g2",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "simulate": "evenhub-simulator",
     "qr": "evenhub qr",
-    "pack": "npm run build && node -e \"const v=require('./package.json').version; require('child_process').execSync('evenhub pack app.json dist/ -o speechcoach-v'+v+'.ehpk', {stdio:'inherit'})\"",
+    "pack": "npm run build && node -e \"const v=require('./package.json').version; require('child_process').execSync('npx @evenrealities/evenhub-cli pack app.json dist/ -o speechcoach-v'+v+'.ehpk', {stdio:'inherit'})\"",
     "test": "tsx src/test-events.ts"
   },
   "dependencies": {
