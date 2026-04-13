@@ -39,6 +39,7 @@ declare const bridge: {
   onLaunchSource?(callback: (source: LaunchSourceLike) => void): () => void;
 };
 
+let initialized = false;
 let updateInterval: ReturnType<typeof setInterval> | null = null;
 let vuInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -111,6 +112,9 @@ function triggerHaptic(): void {
 }
 
 export function initGlasses(): void {
+  if (initialized) return;
+  initialized = true;
+
   // Guard against double-init: clear any existing interval
   if (updateInterval) {
     clearInterval(updateInterval);

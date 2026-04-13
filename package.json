@@ -1,6 +1,6 @@
 {
   "name": "speechcoach-g2",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,7 +13,7 @@
     "test": "tsx src/test-events.ts"
   },
   "dependencies": {
-    "@evenrealities/even_hub_sdk": "^0.0.9",
+    "@evenrealities/even_hub_sdk": "^0.0.10",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "upng-js": "^2.1.0"

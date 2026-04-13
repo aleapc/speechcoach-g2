@@ -44,6 +44,7 @@ export class BackendClient {
   private chunkBuffer: ArrayBuffer[] = [];
   private bufferedBytes = 0;
   private readonly CHUNK_FLUSH_BYTES = 16000 * 2; // ~1 sec at 16kHz/16bit
+  private readonly MAX_BUFFER_BYTES = 512_000; // ~500KB safety cap
 
   constructor(url: string) {
     this.url = url.replace(/\/$/, '');
@@ -142,6 +143,12 @@ export class BackendClient {
     if (!this.sessionId || !this.connected) return;
     this.chunkBuffer.push(pcm);
     this.bufferedBytes += pcm.byteLength;
+    // Safety cap: discard oldest chunks if buffer grows too large
+    // (e.g., when sendInFlight blocks flushing).
+    while (this.bufferedBytes > this.MAX_BUFFER_BYTES && this.chunkBuffer.length > 1) {
+      const discarded = this.chunkBuffer.shift()!;
+      this.bufferedBytes -= discarded.byteLength;
+    }
     if (this.bufferedBytes >= this.CHUNK_FLUSH_BYTES) {
       void this.flushBuffer();
     }
