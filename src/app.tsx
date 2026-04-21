@@ -306,8 +306,8 @@ function App() {
     }
   });
   const [backendStatus, setBackendStatus] = useState<'unknown' | 'ok' | 'fail'>('unknown');
-  // Dirty flag: only save when user explicitly changes a setting
-  const isDirty = useRef(false);
+  // Skip the very first effect-run (initial mount / hydration from storage).
+  const isFirstRun = useRef(true);
 
   const saveToStorage = useCallback(() => {
     state.thresholds = { ...thresholds };
@@ -341,13 +341,14 @@ function App() {
     }
   }, [backendUrl]);
 
-  // Only persist when settings actually change (dirty flag set by onChange handlers)
+  // Persist whenever the actual settings change (skip the initial mount).
   useEffect(() => {
-    if (isDirty.current) {
-      isDirty.current = false;
-      saveToStorage();
+    if (isFirstRun.current) {
+      isFirstRun.current = false;
+      return;
     }
-  }, [saveToStorage]);
+    saveToStorage();
+  }, [thresholds, language]);
 
   useEffect(() => {
     try {
@@ -417,7 +418,7 @@ function App() {
           min={50}
           max={200}
           value={thresholds.slow}
-          onChange={e => { isDirty.current = true; setThresholds(prev => ({ ...prev, slow: Number(e.target.value) })); }}
+          onChange={e => { setThresholds(prev => ({ ...prev, slow: Number(e.target.value) })); }}
         />
 
         <label style={styles.label}>{t('fastThreshold')}</label>
@@ -427,14 +428,14 @@ function App() {
           min={100}
           max={300}
           value={thresholds.fast}
-          onChange={e => { isDirty.current = true; setThresholds(prev => ({ ...prev, fast: Number(e.target.value) })); }}
+          onChange={e => { setThresholds(prev => ({ ...prev, fast: Number(e.target.value) })); }}
         />
 
         <label style={styles.label}>{t('language')}</label>
         <select
           style={styles.select}
           value={language}
-          onChange={e => { isDirty.current = true; setLanguage(e.target.value); }}
+          onChange={e => { setLanguage(e.target.value); }}
         >
           <option value="en">English</option>
           <option value="pt">Portugues</option>
@@ -446,7 +447,7 @@ function App() {
             type="checkbox"
             id="haptic"
             checked={hapticEnabled}
-            onChange={e => { isDirty.current = true; setHapticEnabled(e.target.checked); }}
+            onChange={e => { setHapticEnabled(e.target.checked); }}
           />
           <label htmlFor="haptic" style={{ color: '#aaa', fontSize: 14 }}>
             {t('hapticFeedback')} — {t('hapticHint')}
@@ -470,7 +471,7 @@ function App() {
           type="text"
           value={backendUrl}
           placeholder="http://localhost:8787"
-          onChange={e => { isDirty.current = true; setBackendUrl(e.target.value); }}
+          onChange={e => { setBackendUrl(e.target.value); }}
         />
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button

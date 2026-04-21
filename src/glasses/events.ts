@@ -21,7 +21,7 @@ import {
   goHome,
   toggleLiveView,
 } from '../state';
-import { renderCurrentScreen, cleanup } from './index';
+import { renderCurrentScreen, cleanup, ensureUpdateLoop, isInitialized } from './index';
 import { audioAnalyzer } from './audio';
 import { getStoredBackendUrl, BackendClient, type BackendUpdate } from './backend';
 
@@ -43,10 +43,6 @@ const EVENT_SCROLL_BOTTOM = 2;
 const EVENT_DOUBLE_CLICK = 3;
 const EVENT_FOREGROUND_ENTER = 4;
 const EVENT_FOREGROUND_EXIT = 5;
-
-// Triple-tap: three CLICK events within this window trigger shutdown.
-const TRIPLE_TAP_WINDOW_MS = 700;
-let tapTimestamps: number[] = [];
 
 function normalizeEventType(raw: unknown): number {
   if (raw === undefined || raw === null) return 0;
@@ -78,7 +74,7 @@ export function handleEvent(event: unknown): void {
 
   // Lifecycle: glasses app enters/exits foreground.
   if (eventType === EVENT_FOREGROUND_EXIT) {
-    handleForegroundExit();
+    void handleForegroundExit();
     return;
   }
   if (eventType === EVENT_FOREGROUND_ENTER) {
@@ -86,15 +82,17 @@ export function handleEvent(event: unknown): void {
     return;
   }
 
-  // Double-tap: always go home (works from any screen, even during loading)
+  // Double-tap: at root (home) exit the app; otherwise navigate home.
   if (eventType === EVENT_DOUBLE_CLICK) {
     if (state.isCoaching) {
       stopCoaching();
     }
-    if (state.screen !== 'home') {
-      goHome();
-      renderCurrentScreen();
+    if (state.screen === 'home') {
+      void bridge.shutDownPageContainer(1);
+      return;
     }
+    goHome();
+    renderCurrentScreen();
     return;
   }
 
@@ -107,13 +105,8 @@ export function handleEvent(event: unknown): void {
     return;
   }
 
-  // Single tap: context-dependent (and triple-tap detection)
+  // Single tap: context-dependent
   if (eventType === EVENT_CLICK) {
-    if (registerTapAndCheckTriple()) {
-      gracefulShutdown();
-      return;
-    }
-
     if (state.isLoading) return;
 
     switch (state.screen) {
@@ -131,19 +124,7 @@ export function handleEvent(event: unknown): void {
   }
 }
 
-function registerTapAndCheckTriple(): boolean {
-  const now = Date.now();
-  tapTimestamps.push(now);
-  // Keep only taps within the rolling window
-  tapTimestamps = tapTimestamps.filter(t => now - t <= TRIPLE_TAP_WINDOW_MS);
-  if (tapTimestamps.length >= 3) {
-    tapTimestamps = [];
-    return true;
-  }
-  return false;
-}
-
-function handleForegroundExit(): void {
+async function handleForegroundExit(): Promise<void> {
   state.isForeground = false;
   // Stop any active coaching and release the mic immediately to save battery.
   if (state.isCoaching) {
@@ -157,11 +138,15 @@ function handleForegroundExit(): void {
   // Clear the 1Hz update loop and VU meter interval to save resources.
   cleanup();
   // Persist state so FOREGROUND_ENTER can restore it.
-  void saveLifecycleState();
+  await saveLifecycleState();
 }
 
 function handleForegroundEnter(): void {
   state.isForeground = true;
+  // Recreate the 1Hz update loop that was cleared in handleForegroundExit.
+  if (isInitialized()) {
+    ensureUpdateLoop();
+  }
   // Do NOT auto-resume coaching — user must explicitly tap to start again.
   void restoreLifecycleState().finally(() => {
     try {

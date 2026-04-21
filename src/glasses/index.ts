@@ -111,6 +111,64 @@ function triggerHaptic(): void {
   }
 }
 
+function updateLoopTick(): void {
+  if (!state.isCoaching) {
+    stopVuLoop();
+    return;
+  }
+
+  updateElapsed();
+
+  const prevZone = state.paceZone;
+  // Prefer real metrics from the backend if it's connected; otherwise
+  // fall back to local RMS-based WPM estimation.
+  let wpm: number;
+  if (state.backendConnected) {
+    wpm = state.currentWpm; // already populated by SSE updates
+    state.wpmTimeline.push({ sec: state.elapsedSec, wpm });
+    state.paceZone =
+      wpm < state.thresholds.slow ? 'slow'
+      : wpm > state.thresholds.fast ? 'fast'
+      : 'ok';
+  } else {
+    wpm = audioAnalyzer.getWpm();
+    updateWpm(wpm);
+  }
+
+  // Haptic on zone transition
+  if (state.paceZone !== prevZone) {
+    triggerHaptic();
+  }
+
+  // Sync calibration status to state
+  const cal = audioAnalyzer.getCalibrationStatus();
+  if (cal.isCalibrated) {
+    state.calibratedSilenceThreshold = cal.threshold;
+  }
+
+  if (isMascotLiveView()) {
+    // Only rebuild (with the image) when the pose would change —
+    // otherwise rely on the 300ms text upgrade loop.
+    const image = liveMascotImageBlock();
+    if (image && image.key !== getLastImageKey()) {
+      void renderScreenWithImage(image, liveMascotTextBlocks());
+    }
+    if (!vuInterval) startVuLoop();
+  } else {
+    stopVuLoop();
+    renderCurrentScreen();
+  }
+}
+
+export function ensureUpdateLoop(): void {
+  if (updateInterval != null) return;
+  updateInterval = setInterval(updateLoopTick, 1000);
+}
+
+export function isInitialized(): boolean {
+  return initialized;
+}
+
 export function initGlasses(): void {
   if (initialized) return;
   initialized = true;
@@ -138,54 +196,7 @@ export function initGlasses(): void {
   });
 
   // Start update loop (1Hz for timer + WPM)
-  updateInterval = setInterval(() => {
-    if (!state.isCoaching) {
-      stopVuLoop();
-      return;
-    }
-
-    updateElapsed();
-
-    const prevZone = state.paceZone;
-    // Prefer real metrics from the backend if it's connected; otherwise
-    // fall back to local RMS-based WPM estimation.
-    let wpm: number;
-    if (state.backendConnected) {
-      wpm = state.currentWpm; // already populated by SSE updates
-      state.wpmTimeline.push({ sec: state.elapsedSec, wpm });
-      state.paceZone =
-        wpm < state.thresholds.slow ? 'slow'
-        : wpm > state.thresholds.fast ? 'fast'
-        : 'ok';
-    } else {
-      wpm = audioAnalyzer.getWpm();
-      updateWpm(wpm);
-    }
-
-    // Haptic on zone transition
-    if (state.paceZone !== prevZone) {
-      triggerHaptic();
-    }
-
-    // Sync calibration status to state
-    const cal = audioAnalyzer.getCalibrationStatus();
-    if (cal.isCalibrated) {
-      state.calibratedSilenceThreshold = cal.threshold;
-    }
-
-    if (isMascotLiveView()) {
-      // Only rebuild (with the image) when the pose would change —
-      // otherwise rely on the 300ms text upgrade loop.
-      const image = liveMascotImageBlock();
-      if (image && image.key !== getLastImageKey()) {
-        void renderScreenWithImage(image, liveMascotTextBlocks());
-      }
-      if (!vuInterval) startVuLoop();
-    } else {
-      stopVuLoop();
-      renderCurrentScreen();
-    }
-  }, 1000);
+  ensureUpdateLoop();
 }
 
 export function setupAudioCallback(): void {
